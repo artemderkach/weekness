@@ -3,7 +3,7 @@ cli for testing http services. loadTest will create tons of requests for given U
 
 ## run
 run main `$ go run main.go --help`  
-or install and then run
+or install and then run  
 `go install`  
 `loadtest --help`  
 
