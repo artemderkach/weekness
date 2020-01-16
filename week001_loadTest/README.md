@@ -13,12 +13,13 @@ help output
 $ loadtest --help
 
 Usage:
-  loadtest [OPTIONS] URL
+  main [OPTIONS] URL
 
 Application Options:
   -p, --protocol= http or https protocol (default: http)
   -m, --method=   http method (default: GET)
-  -n, --reqNum=   number of requests (default: 100)
+  -d, --duration= requests duration (in seconds) (default: 3)
+  -r, --rps=      requests per second (default: 100)
 
 Help Options:
   -h, --help      Show this help message
