@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Options struct {
+type options struct {
 	Protocol   string `short:"p" long:"protocol" default:"http" description:"http or https protocol"`
 	Method     string `short:"m" long:"method" default:"GET" description:"http method"`
 	Duration   int    `short:"d" long:"duration" default:"3" description:"requests duration (in seconds)"`
@@ -23,8 +23,13 @@ type Options struct {
 	} `positional-args:"true" required:"true"`
 }
 
+type msg struct {
+	duration time.Duration
+	error    error
+}
+
 func main() {
-	opts := &Options{}
+	opts := &options{}
 	_, err := flags.Parse(opts)
 	if err != nil {
 		// "--help" error
@@ -46,15 +51,20 @@ func main() {
 		log.Fatal(errors.Wrap(err, "error creating request"))
 	}
 
-	c := make(chan time.Duration)
+	c := make(chan *msg)
 	go runner(c, req, opts.RPS, opts.Duration)
 
 	// calculate results
 	var count int64
+	var errCount int64
 	var sum time.Duration
-	for duration := range c {
+	for m := range c {
 		count += 1
-		sum += duration
+		if m.error != nil {
+			errCount += 1
+			continue
+		}
+		sum += m.duration
 	}
 
 	var duration time.Duration
@@ -62,11 +72,12 @@ func main() {
 		duration = time.Duration(sum.Nanoseconds() / count)
 	}
 	fmt.Println("number of requests: ", count)
+	fmt.Println("number of errors:   ", errCount)
 	fmt.Println("time per request:   ", duration)
 }
 
 // runner makes multiple requests
-func runner(c chan time.Duration, req *http.Request, rps int, duration int) {
+func runner(c chan *msg, req *http.Request, rps int, duration int) {
 	var wg sync.WaitGroup
 
 	// "request per second" to "time used for one request"
@@ -82,12 +93,12 @@ func runner(c chan time.Duration, req *http.Request, rps int, duration int) {
 			defer wg.Done()
 
 			duration, err := request(req)
-			if err != nil {
-				log.Println(errors.Wrap(err, "error while request"))
-				return
+			m := &msg{
+				duration: duration,
+				error:    errors.Wrap(err, "error while request"),
 			}
 
-			c <- duration
+			c <- m
 		}()
 
 		timeShouldPass += npr
