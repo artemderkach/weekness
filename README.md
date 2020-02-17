@@ -1,5 +1,4 @@
 # weekness
-challange for creating program every week  
 
 ## list
 
