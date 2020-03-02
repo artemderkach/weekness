@@ -5,19 +5,33 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 
+	"github.com/caarlos0/env/v6"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
+	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
 )
+
+type config struct {
+	Pass string `env:"POSTGRES_PASSWORD"`
+}
 
 type server struct {
 	conn *pgx.Conn
 }
 
 func main() {
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	if err := godotenv.Load(); err != nil {
+		log.Println(errors.Wrap(err, "error getting environment variables from file"))
+	}
+
+	cfg := &config{}
+	if err := env.Parse(cfg); err != nil {
+		log.Fatal(err)
+	}
+
+	conn, err := pgx.Connect(context.Background(), "postgresql://postgres:pas@localhost:5432")
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error connecting to database"))
 	}
@@ -27,6 +41,7 @@ func main() {
 		conn: conn,
 	}
 
+	log.Println("running server on localhost:6969")
 	log.Fatal(http.ListenAndServe(":6969", s.router()))
 }
 
