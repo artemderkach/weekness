@@ -22,6 +22,7 @@ type server struct {
 }
 
 func main() {
+	// load .env file to environment variables
 	if err := godotenv.Load(); err != nil {
 		log.Println(errors.Wrap(err, "error getting environment variables from file"))
 	}
