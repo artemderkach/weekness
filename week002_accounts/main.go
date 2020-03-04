@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/caarlos0/env/v6"
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
 	"github.com/joho/godotenv"
@@ -37,6 +38,16 @@ func main() {
 		log.Fatal(errors.Wrap(err, "error connecting to database"))
 	}
 	defer conn.Close(context.Background())
+
+	// run migrations
+	m, err := migrate.New(
+		"",
+		"postgresql://postgres:pas@localhost:5432",
+	)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "errror running migrations"))
+	}
+	m.Up()
 
 	s := &server{
 		conn: conn,
