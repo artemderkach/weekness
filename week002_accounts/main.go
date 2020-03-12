@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/caarlos0/env/v6"
+	"github.com/coredns/coredns/plugin/file"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
@@ -40,12 +41,17 @@ func main() {
 	defer conn.Close(context.Background())
 
 	// run migrations
+	fsrc, err := (&file.File{}).Open("file://migrations")
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "error creating file driver"))
+	}
+
 	m, err := migrate.New(
-		"",
-		"postgresql://postgres:pas@localhost:5432",
+		"file://migrations",
+		"postgres://postgres:pas@localhost:5432",
 	)
 	if err != nil {
-		log.Fatal(errors.Wrap(err, "errror running migrations"))
+		log.Fatal(errors.Wrap(err, "error running migrations"))
 	}
 	m.Up()
 
@@ -57,7 +63,13 @@ func main() {
 	log.Fatal(http.ListenAndServe(":6969", s.router()))
 }
 
-func sendErr(w http.ResponseWriter, msg string) {
+func sendErr(w http.ResponseWriter, err error, msg string) {
+	if err == nil {
+		log.Printf("[ERROR] %s", errors.New(msg))
+	} else {
+		log.Printf("[ERROR] %s", errors.Wrap(err, msg))
+	}
+
 	w.Write([]byte(msg))
 }
 
@@ -87,9 +99,15 @@ func (s *server) handleAccountCreate() http.HandlerFunc {
 
 		err := json.NewDecoder(r.Body).Decode(acc)
 		if err != nil {
-			sendErr(w, "invalid request body")
+			sendErr(w, err, "invalid request body")
 			return
 		}
 
+		_, err = s.conn.Query(context.Background(), "INSERT INTO users (name, email) VALUES ($1, $2)", acc.Name, acc.Email)
+		if err != nil {
+			sendErr(w, err, "error creating user")
+		}
+
+		w.Write([]byte("created"))
 	}
 }
