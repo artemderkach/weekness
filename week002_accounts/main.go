@@ -7,8 +7,9 @@ import (
 	"net/http"
 
 	"github.com/caarlos0/env/v6"
-	"github.com/coredns/coredns/plugin/file"
 	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
 	"github.com/joho/godotenv"
@@ -34,6 +35,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	conn, err := pgx.Connect(context.Background(), "postgresql://postgres:pas@localhost:5432")
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error connecting to database"))
@@ -41,14 +44,9 @@ func main() {
 	defer conn.Close(context.Background())
 
 	// run migrations
-	fsrc, err := (&file.File{}).Open("file://migrations")
-	if err != nil {
-		log.Fatal(errors.Wrap(err, "error creating file driver"))
-	}
-
 	m, err := migrate.New(
 		"file://migrations",
-		"postgres://postgres:pas@localhost:5432",
+		"postgres://postgres:pas@localhost:5432?sslmode=disable",
 	)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error running migrations"))
