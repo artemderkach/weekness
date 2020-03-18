@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"runtime"
+	"strings"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/golang-migrate/migrate/v4"
@@ -51,7 +54,9 @@ func main() {
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error running migrations"))
 	}
-	m.Up()
+	if err := m.Up(); err != nil {
+		log.Fatal(errors.Wrap(err, "cannot run migration"))
+	}
 
 	s := &server{
 		conn: conn,
@@ -62,10 +67,17 @@ func main() {
 }
 
 func sendErr(w http.ResponseWriter, err error, msg string) {
+	// information about error locaton
+	pc, file, line, _ := runtime.Caller(1)
+	fileElems := strings.Split(file, "/")
+	file = strings.Join(fileElems[len(fileElems)-3:], "/")
+	funcNameElems := strings.Split(runtime.FuncForPC(pc).Name(), "/")
+	funcName := strings.Join(funcNameElems[len(funcNameElems)-1:], "/")
+
 	if err == nil {
-		log.Printf("[ERROR] %s", errors.New(msg))
+		log.Printf("%s:%d %s [ERROR] %s", file, line, funcName, errors.New(msg))
 	} else {
-		log.Printf("[ERROR] %s", errors.Wrap(err, msg))
+		log.Printf("%s:%d %s [ERROR] %s", file, line, funcName, errors.Wrap(err, msg))
 	}
 
 	w.Write([]byte(msg))
@@ -74,7 +86,9 @@ func sendErr(w http.ResponseWriter, err error, msg string) {
 func (s *server) router() http.Handler {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/", s.handleHome())
+	r.HandleFunc("/", s.handleHome()).Methods("GET")
+	r.HandleFunc("/acc", s.handleAccountCreate()).Methods("POST")
+	r.HandleFunc("/acc", s.handleAccountGet()).Methods("GET")
 
 	return r
 }
@@ -104,8 +118,31 @@ func (s *server) handleAccountCreate() http.HandlerFunc {
 		_, err = s.conn.Query(context.Background(), "INSERT INTO users (name, email) VALUES ($1, $2)", acc.Name, acc.Email)
 		if err != nil {
 			sendErr(w, err, "error creating user")
+			return
 		}
 
 		w.Write([]byte("created"))
+	}
+}
+
+func (s *server) handleAccountGet() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		accs := []Account{}
+
+		rows, err := s.conn.Query(context.Background(), "SELECT * FROM users")
+		if err != nil {
+			sendErr(w, err, "error retrieving users")
+			return
+		}
+		defer rows.Close()
+
+		err = rows.Scan(accs)
+		if err != nil {
+			sendErr(w, err, "error retrieving users")
+			return
+		}
+
+		fmt.Println("===>", accs)
+		w.Write([]byte("done"))
 	}
 }
