@@ -54,10 +54,13 @@ func main() {
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error running migrations"))
 	}
-	if err := m.Up(); err != nil {
+
+	err = m.Up()
+	if err != nil && err != migrate.ErrNoChange {
 		log.Fatal(errors.Wrap(err, "cannot run migration"))
 	}
 
+	// start server
 	s := &server{
 		conn: conn,
 	}

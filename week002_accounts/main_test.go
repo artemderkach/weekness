@@ -1,40 +1,54 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	// external database should be prepared before running tests
+var testDatabase = "testdb"
 
+// TestMain prepares database for running tests
+// - create database
+// - run migrations
+// - run tests
+// - close connections and drop database
+func TestMain(m *testing.M) {
 	// create database for test purposes
 	conn, err := pgx.Connect(context.Background(), "postgresql://postgres:pas@localhost:5432/postgres")
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error connecting to database"))
 	}
-	defer conn.Close(context.Background())
 
-	_, err = conn.Exec(context.Background(), "DROP DATABASE IF EXISTS testdb")
+	query := fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDatabase)
+	_, err = conn.Exec(context.Background(), query)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error removing test database"))
 	}
 
-	_, err = conn.Exec(context.Background(), "CREATE DATABASE testdb")
+	query = fmt.Sprintf("CREATE DATABASE %s", testDatabase)
+	_, err = conn.Exec(context.Background(), query)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error creating test database"))
 	}
 
 	// run migration on prepared test database
+	dbURL := fmt.Sprintf("postgres://postgres:pas@localhost:5432/%s?sslmode=disable", testDatabase)
 	migr, err := migrate.New(
 		"file://migrations",
-		"postgres://postgres:pas@localhost:5432/testdb?sslmode=disable",
+		dbURL,
 	)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error running migrations"))
@@ -45,38 +59,54 @@ func TestMain(m *testing.M) {
 		log.Fatal(errors.Wrap(err, "cannot run migration"))
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+
+	// clean up connections and db
+	srcErr, dbErr := migr.Close()
+	if srcErr != nil {
+		log.Fatal(errors.Wrap(srcErr, "error closing connection"))
+	}
+	if dbErr != nil {
+		log.Fatal(errors.Wrap(dbErr, "error closing connection"))
+	}
+
+	query = fmt.Sprintf("DROP DATABASE %s", testDatabase)
+	_, err = conn.Exec(context.Background(), query)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "error dropping test database"))
+	}
+	err = conn.Close(context.Background())
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "error closing connection"))
+	}
+
+	defer os.Exit(code)
 }
 
-func migr() error {
-	// run migrations
+func TestM(t *testing.T) {
+	conn, err := pgx.Connect(context.Background(), "postgresql://postgres:pas@localhost:5432/postgres")
+	require.Nil(t, errors.Wrap(err, "error connecting to db"))
+	defer conn.Close(context.Background())
 
-	return nil
+	srv := &server{
+		conn: conn,
+	}
+
+	ts := httptest.NewServer(srv.router())
+
+	acc := &Account{
+		Name:  "Neo",
+		Email: "TheOne@gmail.com",
+	}
+
+	accBody, err := json.Marshal(acc)
+	require.Nil(t, err)
+
+	r := bytes.NewReader(accBody)
+	res, err := http.Post(ts.URL+"/acc", "", r)
+	require.Nil(t, err)
+
+	body, err := ioutil.ReadAll(res.Body)
+	require.Nil(t, err)
+	require.Equal(t, "created", string(body))
 }
-
-//s := &server{
-//conn: conn,
-//}
-
-//ts := httptest.NewServer(s.router())
-//defer ts.Close()
-
-//acc := &Account{
-//Name:  "Neo",
-//Email: "neo@the.one",
-//}
-//b, err := json.Marshal(acc)
-//require.Nil(t, err)
-//r := bytes.NewReader(b)
-//client := &http.Client{}
-//req, err := http.NewRequest("POST", ts.URL+"/acc", r)
-//require.Nil(t, err)
-//res, err := client.Do(req)
-//require.Nil(t, err)
-//acc2 := &Account{}
-
-//dec := json.NewDecoder(res.Body)
-//err = dec.Decode(acc2)
-//require.Nil(t, err)
-
-//fmt.Println("===>", acc2)
