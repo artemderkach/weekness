@@ -1,15 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 var testDatabase = "testdb"
@@ -75,4 +81,32 @@ func TestMain(m *testing.M) {
 	}
 
 	defer os.Exit(code)
+}
+
+func TestM(t *testing.T) {
+	conn, err := pgx.Connect(context.Background(), "postgresql://postgres:pas@localhost:5432/postgres")
+	require.Nil(t, errors.Wrap(err, "error connecting to db"))
+	defer conn.Close(context.Background())
+
+	srv := &server{
+		conn: conn,
+	}
+
+	ts := httptest.NewServer(srv.router())
+
+	acc := &Account{
+		Name:  "Neo",
+		Email: "TheOne@gmail.com",
+	}
+
+	accBody, err := json.Marshal(acc)
+	require.Nil(t, err)
+
+	r := bytes.NewReader(accBody)
+	res, err := http.Post(ts.URL+"/acc", "", r)
+	require.Nil(t, err)
+
+	body, err := ioutil.ReadAll(res.Body)
+	require.Nil(t, err)
+	require.Equal(t, "created", string(body))
 }
