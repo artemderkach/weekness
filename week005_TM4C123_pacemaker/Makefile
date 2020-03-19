@@ -1,7 +1,7 @@
 include makefile.conf
 NAME=main
 
-main: $(NAME).c $(STARTUP)
+$(NAME): $(NAME).c $(STARTUP)
 	$(CC) $^ $(CFLAGS) -o $(NAME)-$(CORE).axf
 
 debug: $(NAME).c $(STARTUP)
@@ -16,5 +16,5 @@ openocd:
 gdb:
 	arm-none-eabi-gdb $(NAME)-$(CORE).axf
 
-flash:
+flash: $(NAME)
 	openocd -f ek-tm4c123gxl.cfg -c "program $(NAME)-$(CORE).axf verify reset exit"

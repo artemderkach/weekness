@@ -7,15 +7,31 @@
 void SystemInit() {}
 #endif
 
-int main(void){    // initialize PF0 and PF4 and make them inputs
-	PortF_Init();    // make PF3-1 out (PF3-1 built-in LEDs)
+unsigned long previousState = 0x0;
+int main(void){
+	PortF_Init();
 
+	previousState = SW1;
 	while (1) {
 		if (!SW1) {
-			LED_GREEN = PF_LED_GREEN;
-			continue;
+			LED_GREEN = 0;
+
+			previousState = SW1;
 		}
 
-		LED_GREEN = 0;	
+		if (SW1 && previousState) {
+			LED_GREEN = PF_LED_GREEN;
+
+			previousState = SW1;
+		}
+
+		if (SW1 && !previousState) {
+			DelayMS(250);
+			LED_RED = PF_LED_RED;
+			DelayMS(250);
+			LED_RED = 0;
+
+			previousState = SW1;
+		}
 	}
 }

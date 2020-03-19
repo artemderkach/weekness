@@ -3,7 +3,7 @@
 void DelayMS(unsigned long time) {
 	unsigned long i;
 	while (time > 0) {
-		i = 13333;
+		i = 1333;
 		while (i > 0) {
 			i -= 1;
 		}
